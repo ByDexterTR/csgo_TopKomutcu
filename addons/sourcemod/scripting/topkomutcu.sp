@@ -156,14 +156,7 @@ public int ConfirmHandle(Menu menu, MenuAction action, int client, int position)
 					SQL_TQuery(g_hDB, SendLog, buffer);
 					PrintToChat(client, "[SM] \x01Başarıyla anlık süre bilgisi \x0EPanele \x01kaydedildi!");
 					
-					Format(buffer, sizeof(buffer), "DELETE FROM topkomutcu;");
-					SQL_TQuery(g_hDB, SaveSQLPlayerCallback, buffer);
-					for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
-					{
-						OnClientDisconnect(i);
-						OnClientPostAdminCheck(i);
-					}
-					PrintToChatAll("[SM] \x0E%N \x01top komutçu sürelerini sıfırladı!", client);
+					CreateTimer(2.0, Delay, client, TIMER_FLAG_NO_MAPCHANGE);
 				}
 				else
 				{
@@ -179,6 +172,19 @@ public int ConfirmHandle(Menu menu, MenuAction action, int client, int position)
 	}
 	else if (action == MenuAction_End)
 		delete menu;
+}
+
+public Action Delay(Handle timer, int client)
+{
+	char buffer[3096];
+	Format(buffer, sizeof(buffer), "DELETE FROM topkomutcu;");
+	SQL_TQuery(g_hDB, SaveSQLPlayerCallback, buffer);
+	for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
+	{
+		OnClientDisconnect(i);
+		OnClientPostAdminCheck(i);
+	}
+	PrintToChatAll("[SM] \x0E%N \x01top komutçu sürelerini sıfırladı!", client);
 }
 
 public int SaveSQLPlayerCallback(Handle owner, Handle hndl, char[] error, any data)
@@ -270,22 +276,21 @@ public void SaveSQLCookies(int client)
 
 public Action PlayTimeTimer(Handle timer)
 {
+	kaydet++;
+	if (kaydet == 10)
+	{
+		for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
+		{
+			OnClientDisconnect(i);
+			OnClientPostAdminCheck(i);
+		}
+		kaydet = 0;
+	}
 	if (warden_exist())
 	{
-		kaydet++;
 		for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i) && warden_iswarden(i))
 		{
 			g_iPlayTimeWeek[i]++;
-		}
-		
-		if (kaydet == 30)
-		{
-			for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
-			{
-				OnClientDisconnect(i);
-				OnClientPostAdminCheck(i);
-			}
-			kaydet = 0;
 		}
 	}
 }
