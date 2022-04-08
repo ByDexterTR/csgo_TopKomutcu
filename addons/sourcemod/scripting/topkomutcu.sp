@@ -14,7 +14,7 @@ int g_iHours, g_iMinutes, g_iSeconds;
 
 public Plugin myinfo = 
 {
-	name = "Top Komutçu", 
+	name = "TopKomutçu", 
 	author = "ByDexter - (quantum.)", 
 	description = "", 
 	version = "1.0", 
@@ -23,11 +23,11 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	RegConsoleCmd("sm_topkom", Command_TopKomutcu);
 	RegConsoleCmd("sm_topkomutcu", Command_TopKomutcu);
+	RegConsoleCmd("sm_komutcular", Command_TopKomutcu);
 	RegConsoleCmd("sm_komsurem", Command_Komsurem);
 	RegConsoleCmd("sm_komutcusurem", Command_Komsurem);
-	RegAdminCmd("sm_topkompanel", Command_TopKomReset, ADMFLAG_ROOT);
+	RegAdminCmd("sm_topkompanel", Command_TopkomutcuReset, ADMFLAG_ROOT);
 	SQL_TConnect(OnSQLConnect, "topkomutcu");
 }
 
@@ -90,7 +90,7 @@ public int OnSQLConnectCallback(Handle owner, Handle hndl, char[] error, any dat
 	}
 	else
 	{
-		for (int client = 1; client <= MaxClients; client++)if (IsClientInGame(client) && !IsFakeClient(client))
+		for (int client = 1; client <= MaxClients; client++)if (IsValidClient(client))
 			OnClientPostAdminCheck(client);
 	}
 }
@@ -125,12 +125,12 @@ public Action Command_Komsurem(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action Command_TopKomReset(int client, int args)
+public Action Command_TopkomutcuReset(int client, int args)
 {
 	Menu menu = new Menu(ConfirmHandle);
 	menu.SetTitle("Top Komutçu Sıfırlansın Mı?\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n ");
-	menu.AddItem("Yes", "Evet");
-	menu.AddItem("No", "İptal Et\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿");
+	menu.AddItem("0", "Evet");
+	menu.AddItem("1", "İptal Et\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿");
 	menu.ExitBackButton = false;
 	menu.ExitButton = false;
 	menu.Display(client, MENU_TIME_FOREVER);
@@ -140,34 +140,32 @@ public int ConfirmHandle(Menu menu, MenuAction action, int client, int position)
 {
 	if (action == MenuAction_Select)
 	{
-		switch (position)
+		char item[4];
+		menu.GetItem(position, item, 4);
+		if (StringToInt(item) == 0)
 		{
-			case 0:
+			if (g_hDB != null)
 			{
-				if (g_hDB != null)
+				for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i))
 				{
-					for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
-					{
-						OnClientDisconnect(i);
-						OnClientPostAdminCheck(i);
-					}
-					char buffer[3096];
-					Format(buffer, sizeof(buffer), "SELECT playername, weekly, steamid FROM pmCommand_TopKomutcu ORDER BY weekly DESC LIMIT 999");
-					SQL_TQuery(g_hDB, SendLog, buffer);
-					PrintToChat(client, "[SM] \x01Başarıyla anlık süre bilgisi \x0EPanele \x01kaydedildi!");
-					
-					CreateTimer(2.0, Delay, client, TIMER_FLAG_NO_MAPCHANGE);
+					OnClientDisconnect(i);
+					OnClientPostAdminCheck(i);
 				}
-				else
-				{
-					LogError("Sifirlama islemi basarisiz database baglantisi yok!");
-				}
+				char buffer[200];
+				Format(buffer, sizeof(buffer), "SELECT playername, weekly, steamid FROM topkomutcu ORDER BY weekly DESC LIMIT 999");
+				SQL_TQuery(g_hDB, SendLog, buffer);
+				PrintToChat(client, "[SM] \x01Başarıyla anlık süre bilgisi \x0EPanele \x01kaydedildi!");
+				
+				CreateTimer(2.0, Delay, client, TIMER_FLAG_NO_MAPCHANGE);
 			}
-			case 1:
+			else
 			{
-				Command_TopKomReset(client, 0);
-				PrintHintText(client, "Sıfırlama işlemi başarıyla iptal edildi");
+				LogError("Sifirlama islemi basarisiz database baglantisi yok!");
 			}
+		}
+		else if (StringToInt(item) == 1)
+		{
+			PrintHintText(client, "Sıfırlama işlemi başarıyla iptal edildi");
 		}
 	}
 	else if (action == MenuAction_End)
@@ -176,15 +174,15 @@ public int ConfirmHandle(Menu menu, MenuAction action, int client, int position)
 
 public Action Delay(Handle timer, int client)
 {
-	char buffer[3096];
+	char buffer[200];
 	Format(buffer, sizeof(buffer), "DELETE FROM topkomutcu;");
 	SQL_TQuery(g_hDB, SaveSQLPlayerCallback, buffer);
-	for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
+	for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i))
 	{
 		OnClientDisconnect(i);
 		OnClientPostAdminCheck(i);
 	}
-	PrintToChatAll("[SM] \x0E%N \x01top komutçu sürelerini sıfırladı!", client);
+	PrintToChatAll("[SM] \x0E%N \x01top komutçu süreleri sıfırladı!", client);
 }
 
 public int SaveSQLPlayerCallback(Handle owner, Handle hndl, char[] error, any data)
@@ -276,22 +274,22 @@ public void SaveSQLCookies(int client)
 
 public Action PlayTimeTimer(Handle timer)
 {
+	if (warden_exist())
+	{
+		for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i) && warden_iswarden(i))
+		{
+			g_iPlayTimeWeek[i]++;
+		}
+	}
 	kaydet++;
 	if (kaydet == 10)
 	{
-		for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
+		for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i))
 		{
 			OnClientDisconnect(i);
 			OnClientPostAdminCheck(i);
 		}
 		kaydet = 0;
-	}
-	if (warden_exist())
-	{
-		for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i) && warden_iswarden(i))
-		{
-			g_iPlayTimeWeek[i]++;
-		}
 	}
 }
 
@@ -386,7 +384,7 @@ public int ShowTotalCallback(Handle owner, Handle hndl, char[] error, any client
 		}
 	}
 	if (order < 1)
-		menu2.AddItem("empty", "TopKomutçu Boş!", ITEMDRAW_DISABLED);
+		menu2.AddItem("empty", "Top Komutçu Boş!", ITEMDRAW_DISABLED);
 	
 	menu2.Display(client, MENU_TIME_FOREVER);
 }
@@ -407,7 +405,7 @@ public int DIDMenuHandler2(Menu menu2, MenuAction action, int client, int itemNu
 	else if (action == MenuAction_Cancel)
 	{
 		if (itemNum == MenuCancel_NoDisplay)
-			PrintToChat(client, "[SM] \x01Top Komutçu kayıtlarında bir karışıklık olmuş.");
+			PrintToChat(client, "[SM] \x01TopKomutçu kayıtlarında bir karışıklık olmuş.");
 	}
 	else if (action == MenuAction_End)
 		delete menu2;
@@ -495,15 +493,24 @@ public int SQLShowWasteTime(Handle owner, Handle hndl, char[] error, int client)
 	{
 		char buffer[124];
 		ShowTimer(SQL_FetchInt(hndl, 0), buffer, sizeof(buffer));
-		if (IsClientInGame(client) && !IsFakeClient(client))
+		if (IsValidClient(client))
 			PrintToChat(client, "[SM] Bu hafta toplam \x04%s \x01komut vermişsin!", buffer);
 	}
 	
 	delete hndl;
 }
 
+bool IsValidClient(int client, bool nobots = true)
+{
+	if (client <= 0 || client > MaxClients || !IsClientConnected(client) || (nobots && IsFakeClient(client)))
+	{
+		return false;
+	}
+	return IsClientInGame(client);
+}
+
 public void OnPluginEnd()
 {
-	for (int i = 1; i <= MaxClients; i++)if (IsClientInGame(i) && !IsFakeClient(i))
+	for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i))
 		OnClientDisconnect(i);
 } 
