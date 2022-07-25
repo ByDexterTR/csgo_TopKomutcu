@@ -1,5 +1,4 @@
 #include <sourcemod>
-#include <sdktools>
 #include <warden>
 
 #pragma semicolon 1
@@ -14,19 +13,18 @@ int g_iHours, g_iMinutes, g_iSeconds;
 
 public Plugin myinfo = 
 {
-	name = "TopKomutçu", 
+	name = "Top komutçu", 
 	author = "ByDexter - (quantum.)", 
 	description = "", 
-	version = "1.0", 
+	version = "1.1", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
 public void OnPluginStart()
 {
 	RegConsoleCmd("sm_topkomutcu", Command_TopKomutcu);
-	RegConsoleCmd("sm_komutcular", Command_TopKomutcu);
+	RegConsoleCmd("sm_topkom", Command_TopKomutcu);
 	RegConsoleCmd("sm_komsurem", Command_Komsurem);
-	RegConsoleCmd("sm_komutcusurem", Command_Komsurem);
 	RegAdminCmd("sm_topkompanel", Command_TopkomutcuReset, ADMFLAG_ROOT);
 	SQL_TConnect(OnSQLConnect, "topkomutcu");
 }
@@ -128,7 +126,7 @@ public Action Command_Komsurem(int client, int args)
 public Action Command_TopkomutcuReset(int client, int args)
 {
 	Menu menu = new Menu(ConfirmHandle);
-	menu.SetTitle("Top Komutçu Sıfırlansın Mı?\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n ");
+	menu.SetTitle("Top komutçu kaydedilip sıfırlansın mı?\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿");
 	menu.AddItem("0", "Evet");
 	menu.AddItem("1", "İptal Et\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿");
 	menu.ExitBackButton = false;
@@ -146,6 +144,7 @@ public int ConfirmHandle(Menu menu, MenuAction action, int client, int position)
 		{
 			if (g_hDB != null)
 			{
+				PrintToChatAll("[SM] \x10%N \x0CTop komutçu \x01panele kaydedip \x0Fsıfırlıyor...", client);
 				for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i))
 				{
 					OnClientDisconnect(i);
@@ -154,18 +153,17 @@ public int ConfirmHandle(Menu menu, MenuAction action, int client, int position)
 				char buffer[200];
 				Format(buffer, sizeof(buffer), "SELECT playername, weekly, steamid FROM topkomutcu ORDER BY weekly DESC LIMIT 999");
 				SQL_TQuery(g_hDB, SendLog, buffer);
-				PrintToChat(client, "[SM] \x01Başarıyla anlık süre bilgisi \x0EPanele \x01kaydedildi!");
+				char g_LogPath[256], Formatlama[20];
 				
-				CreateTimer(2.0, Delay, client, TIMER_FLAG_NO_MAPCHANGE);
+				FormatTime(Formatlama, 20, "%d_%b_%Y", GetTime());
+				BuildPath(Path_SM, g_LogPath, sizeof(g_LogPath), "logs/topkom_%s.txt", Formatlama);
+				PrintToChat(client, "[SM] \x01Başarıyla \x0Ctop komutçu\x01 panele \x06kaydedildi!");
+				PrintToChat(client, "[SM] Kayıt yeri: \x0E%s", g_LogPath);
 			}
 			else
 			{
 				LogError("Sifirlama islemi basarisiz database baglantisi yok!");
 			}
-		}
-		else if (StringToInt(item) == 1)
-		{
-			PrintHintText(client, "Sıfırlama işlemi başarıyla iptal edildi");
 		}
 	}
 	else if (action == MenuAction_End)
@@ -182,7 +180,6 @@ public Action Delay(Handle timer, int client)
 		OnClientDisconnect(i);
 		OnClientPostAdminCheck(i);
 	}
-	PrintToChatAll("[SM] \x0E%N \x01top komutçu süreleri sıfırladı!", client);
 }
 
 public int SaveSQLPlayerCallback(Handle owner, Handle hndl, char[] error, any data)
@@ -279,10 +276,11 @@ public Action PlayTimeTimer(Handle timer)
 		for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i) && warden_iswarden(i))
 		{
 			g_iPlayTimeWeek[i]++;
+			break;
 		}
 	}
 	kaydet++;
-	if (kaydet == 10)
+	if (kaydet == 600)
 	{
 		for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i))
 		{
@@ -324,7 +322,7 @@ public int SendLog(Handle owner, Handle hndl, char[] error, any data)
 				g_iSeconds = 0;
 				ShowTimer2(SQL_FetchInt(hndl, 1));
 				
-				Format(textbuffer, sizeof(textbuffer), "%i | %s - %d Saat %d Dakika %d Saniye - Steamid: %s", order, name, g_iHours, g_iMinutes, g_iSeconds, steamid);
+				Format(textbuffer, sizeof(textbuffer), "%i | %s - %d saat %d dakika %d saniye - steamid: %s", order, name, g_iHours, g_iMinutes, g_iSeconds, steamid);
 				if (g_iHours == 0 && g_iMinutes == 0 && g_iSeconds == 0) { /* DO NOTHING */ }
 				else
 					LogToFileEx(g_LogPath, textbuffer);
@@ -333,6 +331,16 @@ public int SendLog(Handle owner, Handle hndl, char[] error, any data)
 				break;
 		}
 	}
+	
+	char buffer[200];
+	Format(buffer, sizeof(buffer), "DELETE FROM topkomutcu;");
+	SQL_TQuery(g_hDB, SaveSQLPlayerCallback, buffer);
+	for (int i = 1; i <= MaxClients; i++)if (IsValidClient(i))
+	{
+		OnClientDisconnect(i);
+		OnClientPostAdminCheck(i);
+	}
+	PrintToChatAll("[SM] \x0CTop komutçu \x0Fsıfırlandı!");
 }
 
 public void ShowTotal(int client)
@@ -345,7 +353,7 @@ public void ShowTotal(int client)
 	}
 	else
 	{
-		PrintToChat(client, " \x03Top Komutçu sistemi veritabanı şu anda çalışmıyor :(");
+		PrintToChat(client, "[SM] Veri tabanına bağlantı \x0Fsağlanamıyor...");
 	}
 }
 
@@ -359,7 +367,7 @@ public int ShowTotalCallback(Handle owner, Handle hndl, char[] error, any client
 	}
 	
 	Menu menu2 = new Menu(DIDMenuHandler2);
-	menu2.SetTitle("Top Komutçu\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n ");
+	menu2.SetTitle("Top komutçu\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n ");
 	
 	int order = 0;
 	char name[64];
@@ -377,35 +385,24 @@ public int ShowTotalCallback(Handle owner, Handle hndl, char[] error, any client
 			g_iMinutes = 0;
 			g_iSeconds = 0;
 			ShowTimer2(SQL_FetchInt(hndl, 1));
-			Format(textbuffer, 128, "%i | %s - %d Saat %d Dk. %d Sn.", order, name, g_iHours, g_iMinutes, g_iSeconds);
+			Format(textbuffer, 128, "%i | %s - %d saat %d dakika %d saniye", order, name, g_iHours, g_iMinutes, g_iSeconds);
 			if (g_iHours == 0 && g_iMinutes == 0 && g_iSeconds == 0) { /* DO NOTHING*/ }
 			else
-				menu2.AddItem(steamid, textbuffer);
+				menu2.AddItem(steamid, textbuffer, ITEMDRAW_DISABLED);
 		}
 	}
 	if (order < 1)
-		menu2.AddItem("empty", "Top Komutçu Boş!", ITEMDRAW_DISABLED);
+		menu2.AddItem("empty", "Top komutçu boş!", ITEMDRAW_DISABLED);
 	
 	menu2.Display(client, MENU_TIME_FOREVER);
 }
 
 public int DIDMenuHandler2(Menu menu2, MenuAction action, int client, int itemNum)
 {
-	if (action == MenuAction_Select)
-	{
-		char info[128], community[128];
-		
-		menu2.GetItem(itemNum, info, sizeof(info));
-		GetCommunityID(info, community, sizeof(community));
-		
-		Format(community, sizeof(community), "http://steamcommunity.com/profiles/%s", community);
-		PrintToChat(client, " \x02%s", community);
-		PrintToConsole(client, community);
-	}
-	else if (action == MenuAction_Cancel)
+	if (action == MenuAction_Cancel)
 	{
 		if (itemNum == MenuCancel_NoDisplay)
-			PrintToChat(client, "[SM] \x01TopKomutçu kayıtlarında bir karışıklık olmuş.");
+			PrintToChat(client, "[SM] \x01Top komutçu kayıtlarında bir karışıklık olmuş.");
 	}
 	else if (action == MenuAction_End)
 		delete menu2;
@@ -429,15 +426,15 @@ int ShowTimer(int Time, char[] buffer, int sizef)
 	}
 	if (g_iHours >= 1)
 	{
-		Format(buffer, sizef, "%d Saat %d Dakika %d Saniye", g_iHours, g_iMinutes, g_iSeconds);
+		Format(buffer, sizef, "%d saat %d dakika %d saniye", g_iHours, g_iMinutes, g_iSeconds);
 	}
 	else if (g_iMinutes >= 1)
 	{
-		Format(buffer, sizef, "%d Dakika %d Saniye", g_iMinutes, g_iSeconds);
+		Format(buffer, sizef, "%d dakika %d saniye", g_iMinutes, g_iSeconds);
 	}
 	else
 	{
-		Format(buffer, sizef, "%d Saniye", g_iSeconds);
+		Format(buffer, sizef, "%d saniye", g_iSeconds);
 	}
 }
 
@@ -459,25 +456,6 @@ void ShowTimer2(int Time)
 	}
 }
 
-bool GetCommunityID(char[] AuthID, char[] FriendID, int size)
-{
-	if (strlen(AuthID) < 11 || AuthID[0] != 'S' || AuthID[6] == 'I')
-	{
-		FriendID[0] = 0;
-		return false;
-	}
-	int iUpper = 765611979;
-	int iFriendID = StringToInt(AuthID[10]) * 2 + 60265728 + AuthID[8] - 48;
-	int iDiv = iFriendID / 100000000;
-	int iIdx = 9 - (iDiv ? iDiv / 10 + 1:0);
-	iUpper += iDiv;
-	IntToString(iFriendID, FriendID[iIdx], size - iIdx);
-	iIdx = FriendID[9];
-	IntToString(iUpper, FriendID, size);
-	FriendID[9] = iIdx;
-	return true;
-}
-
 public int SQLShowWasteTime(Handle owner, Handle hndl, char[] error, int client)
 {
 	if (hndl == null)
@@ -494,7 +472,7 @@ public int SQLShowWasteTime(Handle owner, Handle hndl, char[] error, int client)
 		char buffer[124];
 		ShowTimer(SQL_FetchInt(hndl, 0), buffer, sizeof(buffer));
 		if (IsValidClient(client))
-			PrintToChat(client, "[SM] Bu hafta toplam \x04%s \x01komut vermişsin!", buffer);
+			PrintToChat(client, "[SM] Toplam \x04%s \x01komut vermişsin!", buffer);
 	}
 	
 	delete hndl;
